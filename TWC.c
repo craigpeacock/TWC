@@ -26,8 +26,30 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdint.h>
 #include <stdbool.h>
 #include <byteswap.h>
+#include <stdlib.h>
+
+// Commands from https://teslamotorsclub.com/tmc/posts/3225600/
+
+#define GET_FIRMWARE_VER 	0xFB1B
+#define GET_SERIAL_NUMBER	0xFB19
+#define GET_MODEL_NUMBER	0xFB1A
+#define GET_PLUG_STATE		0xFBB4
+#define GET_VIN_FIRST		0xFBEE
+#define GET_VIN_MIDDLE		0xFBEF
+#define GET_VIN_LAST		0xFBF1
+
+#define START_CHARGING		0xFC1B
+#define STOP_CHARGING		0xFCB2
 
 #pragma pack(1)
+
+struct CIRCULAR_BUFFER {
+	uint8_t * buffer;
+	uint16_t head;
+	uint16_t tail;
+	uint16_t max;
+	bool full;
+};
 
 struct HEARTBEAT {
 	uint8_t		startbyte;
@@ -171,13 +193,13 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 	}
 }
 
-int GetFirmwareVersion(int fd)
+int SendCommand(int fd, uint16_t command)
 {
 	int nbytes; 
 	struct PACKET packet;
 	
 	packet.startbyte = 0xC0;
-	packet.function = bswap_16(0xFB1B);
+	packet.function = bswap_16(command);
 	packet.TWCID = bswap_16(0x9819);
 	packet.payload_byte_0 = 0x00;
 	packet.payload_byte_1 = 0x00;
@@ -198,17 +220,87 @@ int GetFirmwareVersion(int fd)
 	} 
 }
 
-int main(int argc, char **argv)
+int InitCircularBuffer(struct CIRCULAR_BUFFER *cir_buf)
 {
-	int fd; 	
-	char buffer[64]; 
+	cir_buf->buffer = malloc(cir_buf->max);
+	cir_buf->head = 0;
+	cir_buf->tail = 0;
+}
+
+int FreeCircularBuffer(struct CIRCULAR_BUFFER *cir_buf)
+{
+	free(cir_buf->buffer);
+}
+
+int ReadSerialCircularBuffer(int fd, struct CIRCULAR_BUFFER *cir_buf)
+{
+	int i;
+	int nbytes;
+	char buffer[64];
+
+	// Read from serial port... 	
+	if ((nbytes = read(fd, &buffer, sizeof(buffer))) < 0) {
+		perror("Read");
+		return 1;
+	} 
+	// ...and copy to circular buffer
+	if (nbytes != 0) {
+		for (i = 0; i < nbytes; i++) {
+			cir_buf->buffer[cir_buf->head++] = buffer[i];
+			//printf(" %02X %02X\r\n",((cir_buf->head)-1), cir_buf->buffer[cir_buf->head-1]);
+			if (cir_buf->head >= cir_buf->max) cir_buf->head = 0;
+		}
+	}
+}
+
+int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
+{
+	uint16_t i = cb->tail;
+	bool StartByteFound = 0;
+	uint16_t StartByte = 0;
+	bool EndByteFound = 0;
+	uint16_t EndByte = 0;
 	
-	int nbytes; 
-	int i; 
-	struct termios options;
-	char *field[20];
+	char buffer[64];
+	
+	do {
+		// Find Start and End Bytes
+		if (cb->buffer[i] == 0xC0) { 
+			if (!StartByteFound) {
+				StartByte = i;
+				StartByteFound = 1;
+			} else {
+				EndByte = i;
+				EndByteFound = 1;
+				break;
+			}
+		}
+		// Advance position and roll over if required
+		if (i++ >= cb->max) cb->tail = 0; 
+	} while (i != cb-> head);
 		
-	if ((fd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_NDELAY)) < 0) {
+	if (StartByteFound & EndByteFound) {
+		//printf("Start Byte %d\r\n", StartByte);
+		//printf("End Byte %d\r\n", EndByte);
+
+		i = 0;
+		cb->tail = StartByte;
+		do {
+			buffer[i++] = cb->buffer[cb->tail++];
+			if (cb->tail >= cb->max) cb->tail = 0;
+		} while (cb->tail-1 != EndByte);  
+	
+		PrintPacket(buffer, i);
+		if (VerifyCheckSum(buffer, i)) ProcessPacket(buffer, i);
+	}
+}
+
+int OpenRS485(const char *devname)
+{
+	int fd; 
+	struct termios options;
+		
+	if ((fd = open(devname, O_RDWR | O_NOCTTY | O_NDELAY)) < 0) {
 		perror("Open");
 		return 1;
 	} 
@@ -241,28 +333,31 @@ int main(int argc, char **argv)
 	
 	// Set port attributes
 	tcsetattr(fd, TCSAFLUSH, &options);
+	
+	return(fd);
+}
+
+int main(int argc, char **argv)
+{
+	int fd; 	
+	
+	fd = OpenRS485("/dev/ttyUSB0");
 		
 	printf("Port Opened\r\n");
-
-	GetFirmwareVersion(fd);
+	
+	struct CIRCULAR_BUFFER cir_buf;
+	cir_buf.max = 256;
+	InitCircularBuffer(&cir_buf);
+	
+	SendCommand(fd, GET_FIRMWARE_VER);
 	
 	do {
-		if ((nbytes = read(fd, &buffer, sizeof(buffer))) < 0) {
-			perror("Read");
-			return 1;
-		} else {
-			if (nbytes == 0) {
-				printf(".\r\n");
-				//printf("No communication from Tesla Wall Connector\r\n");
-				sleep(1);
-			} else {
-				PrintPacket(buffer, nbytes);
-				if (VerifyCheckSum(buffer, nbytes)) ProcessPacket(buffer, nbytes);
-				//sleep(1);
-				//GetFirmwareVersion(fd);
-			}
-		}
+		ReadSerialCircularBuffer(fd, &cir_buf);
+		ExamineCircularBuffer(&cir_buf);
+		sleep(1);
 	} while(1);
+	
+	FreeCircularBuffer(&cir_buf);
 
 	if (close(fd) < 0) {
 		perror("Close");
