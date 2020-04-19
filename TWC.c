@@ -227,10 +227,11 @@ int main(int argc, char **argv)
 	options.c_iflag = 0;
 	
 	// Set 8 bits, no parity, 1 stop bit
-	options.c_cflag &= ~PARENB;
-	options.c_cflag &= ~CSTOPB;
-	options.c_cflag &= ~CSIZE;
-	options.c_cflag |= CS8;
+	options.c_cflag &= ~PARENB;	// Clear parity generation
+	options.c_cflag &= ~CSTOPB;	// Clear two stop bits
+	options.c_cflag &= ~CSIZE;	// Clear Character size mask
+	options.c_cflag |= CS8;		// Set Character mask to 8 bits
+	options.c_cflag | CLOCAL;	// Ignore modem control lines
 	
 	options.c_lflag &= ~ECHO;
 	
@@ -240,20 +241,24 @@ int main(int argc, char **argv)
 	
 	// Set port attributes
 	tcsetattr(fd, TCSAFLUSH, &options);
-	
+		
 	printf("Port Opened\r\n");
 
+	GetFirmwareVersion(fd);
+	
 	do {
 		if ((nbytes = read(fd, &buffer, sizeof(buffer))) < 0) {
 			perror("Read");
 			return 1;
 		} else {
 			if (nbytes == 0) {
+				printf(".\r\n");
 				//printf("No communication from Tesla Wall Connector\r\n");
 				sleep(1);
 			} else {
 				PrintPacket(buffer, nbytes);
 				if (VerifyCheckSum(buffer, nbytes)) ProcessPacket(buffer, nbytes);
+				//sleep(1);
 				//GetFirmwareVersion(fd);
 			}
 		}
