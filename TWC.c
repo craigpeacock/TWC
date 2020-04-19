@@ -29,17 +29,28 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdlib.h>
 
 // Commands from https://teslamotorsclub.com/tmc/posts/3225600/
-
-#define GET_FIRMWARE_VER 	0xFB1B
+// Commands with reponses (0xFB)
 #define GET_SERIAL_NUMBER	0xFB19
 #define GET_MODEL_NUMBER	0xFB1A
+#define GET_FIRMWARE_VER 	0xFB1B
 #define GET_PLUG_STATE		0xFBB4
 #define GET_VIN_FIRST		0xFBEE
 #define GET_VIN_MIDDLE		0xFBEF
 #define GET_VIN_LAST		0xFBF1
 
+// Commands without responses (0xFC)
 #define START_CHARGING		0xFC1B
 #define STOP_CHARGING		0xFCB2
+
+// Responses (0xFD)
+#define RESP_SERIAL_NUMBER	0xFD19
+#define RESP_MODEL_NUMBER	0xFD1A
+#define RESP_FIRMWARE_VER	0xFD1B
+#define RESP_LINK_READY		0xFDE2
+#define RESP_HEART_BEAT		0xFDEB
+#define RESP_VIN_FIRST		0xFDEE
+#define RESP_VIN_MIDDLE		0xFDEF
+#define RESP_VIN_LAST		0xFDF1
 
 #pragma pack(1)
 
@@ -52,7 +63,7 @@ struct CIRCULAR_BUFFER {
 };
 
 struct HEARTBEAT {
-	uint8_t		startbyte;
+	uint8_t		startframe;
 	uint16_t	function;
 	uint16_t	TWCID;
 	uint32_t	totalkWh;
@@ -62,7 +73,7 @@ struct HEARTBEAT {
 };
 
 struct PACKET {
-	uint8_t		startbyte;
+	uint8_t		startframe;
 	uint16_t	function;
 	uint16_t	TWCID;
 	uint8_t		payload_byte_0;
@@ -74,25 +85,33 @@ struct PACKET {
 	uint8_t		payload_byte_6;
 	uint8_t		payload_byte_7;
 	uint8_t 	checksum;
-	uint8_t		stopbyte;
+	uint8_t		endframe;
 };
 
 struct FIRMWARE {
-	uint8_t		startbyte;
+	uint8_t		startframe;
 	uint16_t	function;
 	uint8_t		major;
 	uint8_t		minor;
 	uint8_t		revision;
-	uint8_t		Pad_Byte_0;
-	uint8_t		Pad_Byte_1;
-	uint8_t		Pad_Byte_2;
-	uint8_t		Pad_Byte_3;
-	uint8_t		Pad_Byte_4;
-	uint8_t		Pad_Byte_5;
-	uint8_t		Pad_Byte_6;
-	uint8_t		Pad_Byte_7;
+	uint8_t		pad_byte_0;
+	uint8_t		pad_byte_1;
+	uint8_t		pad_byte_2;
+	uint8_t		pad_byte_3;
+	uint8_t		pad_byte_4;
+	uint8_t		pad_byte_5;
+	uint8_t		pad_byte_6;
+	uint8_t		pad_byte_7;
 	uint8_t		checksum;
-	uint8_t		stopbyte;
+	uint8_t		endframe;
+};
+
+struct STRING {
+	uint8_t		startframe;
+	uint16_t	function;
+	uint8_t		string[11];
+	uint8_t		checksum;
+	uint8_t		endframe;
 };
 
 bool DecodeHeartBeat(struct HEARTBEAT *HeartBeat)
@@ -100,15 +119,38 @@ bool DecodeHeartBeat(struct HEARTBEAT *HeartBeat)
 	printf("Master HeartBeat: ");
 	printf("Total kWh since build : %lukWh, ", (long unsigned int)bswap_32(HeartBeat->totalkWh));
 	printf("Voltage Phase A : %dV, ", bswap_16(HeartBeat->phase_a_volts));
-	printf("Phase B : %dV, ", bswap_16(HeartBeat->phase_b_volts));
-	printf("Phase C : %dV\r\n", bswap_16(HeartBeat->phase_c_volts));
+	printf("Phase B : %dV, ",         bswap_16(HeartBeat->phase_b_volts));
+	printf("Phase C : %dV\r\n\r\n",   bswap_16(HeartBeat->phase_c_volts));
 	return(true);
 }
 
 bool DecodeFirmware(struct FIRMWARE *FirmwareVer)
 {
-	printf("Firmware Version %d.%d.%d\r\n", FirmwareVer->major, FirmwareVer->minor, FirmwareVer->revision);
+	printf("Firmware Version %d.%d.%d\r\n\r\n", FirmwareVer->major, FirmwareVer->minor, FirmwareVer->revision);
 	return(true);
+}
+
+bool DecodeString(struct STRING *String)
+{
+	switch(bswap_16(String->function)) {
+		case RESP_SERIAL_NUMBER:
+			String->string[11] = '\0';
+			printf("Serial Number %s\r\n", String->string);
+			break;
+		case RESP_MODEL_NUMBER:
+			printf("Model Number %s\r\n", String->string);
+			break;
+		case RESP_VIN_FIRST:
+			printf("VIN Number:");
+		case RESP_VIN_MIDDLE:
+		case RESP_VIN_LAST:		
+			String->string[10] = '\0';
+			printf("%s", &String->string[2]);
+			break;
+		default:
+			printf("Unknown String\r\n");
+			break;
+	}
 }
 
 bool PrintPacket(uint8_t *buffer, uint8_t nbytes)
@@ -179,14 +221,21 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 	//printf("Processing Packet");
 	
 	switch (bswap_16(packet->function)) {
-		case 0xFDEB:	
+		case RESP_HEART_BEAT: 	
 			DecodeHeartBeat((struct HEARTBEAT *)buffer);
 			break;
-		case 0xFDE2:
+		case RESP_LINK_READY:
 			//DecodeLinkReady((LINKREADY *)buffer);
 			break;
-		case 0xFD1B:
+		case RESP_FIRMWARE_VER:
 			DecodeFirmware((struct FIRMWARE *)buffer);
+			break;
+		case RESP_SERIAL_NUMBER:
+		case RESP_MODEL_NUMBER:
+		case RESP_VIN_FIRST:
+		case RESP_VIN_MIDDLE:
+		case RESP_VIN_LAST:
+			DecodeString((struct STRING *)buffer);
 			break;
 		default:
 			break;
@@ -198,7 +247,7 @@ int SendCommand(int fd, uint16_t command)
 	int nbytes; 
 	struct PACKET packet;
 	
-	packet.startbyte = 0xC0;
+	packet.startframe = 0xC0;
 	packet.function = bswap_16(command);
 	packet.TWCID = bswap_16(0x9819);
 	packet.payload_byte_0 = 0x00;
@@ -209,87 +258,128 @@ int SendCommand(int fd, uint16_t command)
 	packet.payload_byte_5 = 0x00;
 	packet.payload_byte_6 = 0x00;
 	packet.payload_byte_7 = 0x00;
-	packet.stopbyte = 0xC0;
-	
+	packet.endframe = 0xC0;	
 	packet.checksum = CalculateCheckSum((uint8_t *)&packet, sizeof(packet));
+	
 	PrintPacket((uint8_t *)&packet, sizeof(packet));
+	
 	if ((nbytes = write(fd, (uint8_t *)&packet, sizeof(packet))) < 0) {
-		perror("write");
+		perror("Write");
 	} else {
-		printf("wrote %d bytes\r\n",nbytes);
+		printf("Sent %d bytes\r\n\r\n",nbytes);
 	} 
 }
 
-int InitCircularBuffer(struct CIRCULAR_BUFFER *cir_buf)
+int InitCircularBuffer(struct CIRCULAR_BUFFER *cb)
 {
-	cir_buf->buffer = malloc(cir_buf->max);
-	cir_buf->head = 0;
-	cir_buf->tail = 0;
+	cb->buffer = malloc(cb->max);
+	cb->head = 0;
+	cb->tail = 0;
 }
 
-int FreeCircularBuffer(struct CIRCULAR_BUFFER *cir_buf)
+int PrintCircularBuffer(struct CIRCULAR_BUFFER *cb)
 {
-	free(cir_buf->buffer);
+	uint16_t i;
+	for (i = 0; i <= cb->max; i++)
+		printf(" %02X", cb->buffer[i]);
+	printf("\r\n");
 }
 
-int ReadSerialCircularBuffer(int fd, struct CIRCULAR_BUFFER *cir_buf)
+int FreeCircularBuffer(struct CIRCULAR_BUFFER *cb)
+{
+	free(cb->buffer);
+}
+
+int ReadSerialCircularBuffer(int fd, struct CIRCULAR_BUFFER *cb)
 {
 	int i;
 	int nbytes;
-	char buffer[64];
+	char buffer[32];
 
-	// Read from serial port... 	
-	if ((nbytes = read(fd, &buffer, sizeof(buffer))) < 0) {
-		perror("Read");
-		return 1;
-	} 
-	// ...and copy to circular buffer
-	if (nbytes != 0) {
-		for (i = 0; i < nbytes; i++) {
-			cir_buf->buffer[cir_buf->head++] = buffer[i];
-			//printf(" %02X %02X\r\n",((cir_buf->head)-1), cir_buf->buffer[cir_buf->head-1]);
-			if (cir_buf->head >= cir_buf->max) cir_buf->head = 0;
+	do {
+		// Read from serial port... 	
+		if ((nbytes = read(fd, &buffer, sizeof(buffer))) < 0) {
+			perror("Read");
+			return 1;
+		} 
+		// ...and copy to circular buffer
+		if (nbytes != 0) {
+			//printf("Read %d bytes ",nbytes);
+			for (i = 0; i < nbytes; i++) {
+				cb->buffer[cb->head++] = buffer[i];
+				//printf(" %02X", (uint8_t)buffer[i]);
+				//printf(" %02X %02X\r\n",((cir_buf->head)-1), cir_buf->buffer[cir_buf->head-1]);
+				if (cb->head >= cb->max) cb->head = 0;
+			}
 		}
-	}
+	} while (nbytes);
 }
 
 int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 {
 	uint16_t i = cb->tail;
-	bool StartByteFound = 0;
-	uint16_t StartByte = 0;
-	bool EndByteFound = 0;
-	uint16_t EndByte = 0;
+	uint16_t len;
+	
+	bool StartFrameFound = 0;
+	uint16_t StartFrame = 0;
+	
+	bool EndFrameFound = 0;
+	uint16_t EndFrame = 0;
+	
+	//printf("Examining circular buffer @ %d\r\n", cb->tail);
 	
 	char buffer[64];
-	
+
 	do {
-		// Find Start and End Bytes
+		// Find start and end byte positions
 		if (cb->buffer[i] == 0xC0) { 
-			if (!StartByteFound) {
-				StartByte = i;
-				StartByteFound = 1;
+			if (!StartFrameFound) {
+				StartFrame = i;
+				StartFrameFound = true;
 			} else {
-				EndByte = i;
-				EndByteFound = 1;
+				EndFrame = i;
+				EndFrameFound = true;
 				break;
 			}
 		}
 		// Advance position and roll over if required
-		if (i++ >= cb->max) cb->tail = 0; 
-	} while (i != cb-> head);
-		
-	if (StartByteFound & EndByteFound) {
-		//printf("Start Byte %d\r\n", StartByte);
-		//printf("End Byte %d\r\n", EndByte);
-
-		i = 0;
-		cb->tail = StartByte;
-		do {
-			buffer[i++] = cb->buffer[cb->tail++];
-			if (cb->tail >= cb->max) cb->tail = 0;
-		} while (cb->tail-1 != EndByte);  
+		if (i++ >= cb->max) i = 0;
+	} while (i != cb->head);
 	
+	//printf("Start frame %03d, End frame %03d\r\n", StartFrame, EndFrame);
+	
+	if (!(StartFrameFound & EndFrameFound)) {
+		//printf("Packet Incomplete, abort.\r\n");
+	} else {
+		// Calculate packet length
+		if (StartFrame < EndFrame) {
+			//Frame hasn't rolled over
+			len = (EndFrame - StartFrame) + 1;
+		} else {
+			//Frame has rolled over
+			len = ((EndFrame + cb->max) - StartFrame) +1;
+		}
+		//printf("Start frame %03d, End frame %03d, Length %03d\r\n", StartFrame, EndFrame, len);		
+
+		if (len < 5) {
+			printf("Packet too short, ignoring\r\n");
+			PrintCircularBuffer(cb);
+			// Packet too short. Might be garbage between packets. Advance tail to next 0xC0;
+			cb->tail = EndFrame;
+			return 0;
+		}
+		
+		// Copy frame to new buffer and pass to functions for parsing
+		i = 0;
+		cb->tail = StartFrame;
+		
+		do {
+			buffer[i++] = cb->buffer[cb->tail];
+			if (++cb->tail >= cb->max) cb->tail = 0;
+		} while (i < len);  
+	
+		cb->tail == EndFrame + 1;
+		
 		PrintPacket(buffer, i);
 		if (VerifyCheckSum(buffer, i)) ProcessPacket(buffer, i);
 	}
@@ -340,7 +430,7 @@ int OpenRS485(const char *devname)
 int main(int argc, char **argv)
 {
 	int fd; 	
-	
+
 	fd = OpenRS485("/dev/ttyUSB0");
 		
 	printf("Port Opened\r\n");
@@ -349,12 +439,16 @@ int main(int argc, char **argv)
 	cir_buf.max = 256;
 	InitCircularBuffer(&cir_buf);
 	
-	SendCommand(fd, GET_FIRMWARE_VER);
+	//SendCommand(fd, GET_FIRMWARE_VER);
+	//SendCommand(fd, GET_SERIAL_NUMBER);
+	//SendCommand(fd, GET_MODEL_NUMBER);
 	
 	do {
 		ReadSerialCircularBuffer(fd, &cir_buf);
 		ExamineCircularBuffer(&cir_buf);
-		sleep(1);
+		usleep(50000);
+		//sleep(1);
+		
 	} while(1);
 	
 	FreeCircularBuffer(&cir_buf);
