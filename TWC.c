@@ -34,6 +34,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define GET_MODEL_NUMBER	0xFB1A
 #define GET_FIRMWARE_VER 	0xFB1B
 #define GET_PLUG_STATE		0xFBB4
+
+#define MASTER_HEATBEAT		0xFBE0
+#define LINKREADY2			0xFBE2
+
 #define GET_VIN_FIRST		0xFBEE
 #define GET_VIN_MIDDLE		0xFBEF
 #define GET_VIN_LAST		0xFBF1
@@ -41,18 +45,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 // Commands without responses (0xFC)
 #define START_CHARGING		0xFC1B
 #define STOP_CHARGING		0xFCB2
-
-
-
 #define LINKREADY1			0xFCE1
-#define LINKREADY2			0xFCE2
 
 // Responses (0xFD)
 #define RESP_SERIAL_NUMBER	0xFD19
 #define RESP_MODEL_NUMBER	0xFD1A
 #define RESP_FIRMWARE_VER	0xFD1B
-#define RESP_LINK_READY		0xFDE2	
-#define RESP_HEART_BEAT		0xFDEB
+
+#define SLAVE_HEARTBEAT		0xFDE0
+
+#define RESP_LINK_READY		0xFDE2		// Sent by slave on reset 
+#define RESP_PWR_STATUS		0xFDEB		// Sent by master on reset
 #define RESP_VIN_FIRST		0xFDEE
 #define RESP_VIN_MIDDLE		0xFDEF
 #define RESP_VIN_LAST		0xFDF1
@@ -67,7 +70,7 @@ struct CIRCULAR_BUFFER {
 	bool full;
 };
 
-struct HEARTBEAT {
+struct POWERSTATUS {
 	uint8_t		startframe;
 	uint16_t	function;
 	uint16_t	TWCID;
@@ -137,13 +140,13 @@ struct LINKREADY {
 	uint8_t		endframe;
 };
 
-bool DecodeHeartBeat(struct HEARTBEAT *HeartBeat)
+bool DecodePowerStatus(struct POWERSTATUS *PowerStatus)
 {
-	printf("Master HeartBeat: ");
-	printf("Total kWh since build : %lukWh, ", (long unsigned int)bswap_32(HeartBeat->totalkWh));
-	printf("Voltage Phase A : %dV, ", bswap_16(HeartBeat->phase_a_volts));
-	printf("Phase B : %dV, ",         bswap_16(HeartBeat->phase_b_volts));
-	printf("Phase C : %dV\r\n\r\n",   bswap_16(HeartBeat->phase_c_volts));
+	printf("PowerStatus (Master) : ");
+	printf("Total kWh since build : %lukWh, ", (long unsigned int)bswap_32(PowerStatus->totalkWh));
+	printf("Voltage Phase A : %dV, ", bswap_16(PowerStatus->phase_a_volts));
+	printf("Phase B : %dV, ",         bswap_16(PowerStatus->phase_b_volts));
+	printf("Phase C : %dV\r\n\r\n",   bswap_16(PowerStatus->phase_c_volts));
 	return(true);
 }
 
@@ -270,8 +273,8 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 	//printf("Processing Packet");
 	
 	switch (bswap_16(packet->function)) {
-		case RESP_HEART_BEAT: 	
-			DecodeHeartBeat((struct HEARTBEAT *)buffer);
+		case RESP_PWR_STATUS: 	
+			DecodePowerStatus((struct POWERSTATUS *)buffer);
 			break;
 		case RESP_LINK_READY:
 		case LINKREADY1:
