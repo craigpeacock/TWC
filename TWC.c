@@ -80,6 +80,51 @@ struct POWERSTATUS {
 	uint16_t	phase_c_volts;
 };
 
+struct M_HEARTBEAT {
+	uint8_t		startframe;			// Should be 0xC0
+	uint16_t	function;			// Should be 0xFBE0 
+	uint16_t	src_TWCID;			// Our address (Master)
+	uint16_t	dest_TWCID;			// Address of target slave 
+	uint8_t		command;			// 0x00 NOP 
+									// 0x02 Error
+									// 0x05 Limit power to <max current> (Protocol 1)
+									// 0x06 Increase charge current by 2 amps
+									// 0x07 Decrease charge current by 2 amps
+									// 0x08 Master ack slave stopped charging
+									// 0x09 Limit power to <max current> (Protocol 2)
+	uint16_t	max_current;		// Maximum current slave can draw 
+	uint8_t		master_plug_inserted; // 0x01 if master has plug inserted
+	uint8_t		payload_byte_5;		// Always zero
+	uint8_t		payload_byte_6;		// Always zero
+	uint8_t		payload_byte_7;		// Always zero
+	uint8_t 	checksum;
+	uint8_t		endframe;
+};
+
+struct S_HEARTBEAT {
+	uint8_t		startframe;			// Should be 0xC0
+	uint16_t	function;			// Should be 0xFDE0 
+	uint16_t	src_TWCID;			// Address of Slave 
+	uint16_t	dest_TWCID;			// Address of Master 
+	uint8_t		status;				// 0x00 Ready
+									// 0x01	Charging
+									// 0x02 Error
+									// 0x03 Plugged in, do not charge
+									// 0x04 Plugged in, ready to charge or charge scheduled
+									// 0x05 Busy?
+									// 0x06 +Ack to Increase charge current by 2 amps
+									// 0x07 +Ack to Decrease charge current by 2 amps
+									// 0x08 Starting to charge?
+									// 0x09 +Ack to Limit power to <max current> (Protocol 2)
+	uint16_t	max_current;		// Maximum current slave can draw 
+	uint16_t	actual_current;		// Actual current being drawn by car connected to slave
+	uint8_t		payload_byte_6;		// Always zero
+	uint8_t		payload_byte_7;		// Always zero
+	uint8_t 	checksum;
+	uint8_t		endframe;
+};
+
+
 struct PACKET {
 	uint8_t		startframe;
 	uint16_t	function;
@@ -125,9 +170,9 @@ struct STRING {
 struct LINKREADY {
 	uint8_t		startframe;			// Should be 0xC0
 	uint16_t	function;			// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
-	uint16_t	slaveTWCID;			// Tesla Wall Connector ID
+	uint16_t	slave_TWCID;			// Tesla Wall Connector ID
 	uint8_t	sign;				
-	uint16_t	maxchargerate;
+	uint16_t	max_charge_rate;
 	uint8_t		payload_byte_0;		
 	uint8_t		payload_byte_1;		
 	uint8_t		payload_byte_2;		
@@ -139,6 +184,11 @@ struct LINKREADY {
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
+
+int fd; 
+
+int SendMasterHeartbeat(int fd, uint16_t max_current);
+
 
 bool DecodePowerStatus(struct POWERSTATUS *PowerStatus)
 {
@@ -176,11 +226,55 @@ bool DecodeLinkReady(struct LINKREADY *LinkReady)
 			break;
 	
 	}
-	printf("Slave ID 0x%04X, ",bswap_16(LinkReady->slaveTWCID));
-	printf("Max Charge Rate %0.2fA, ",((float)bswap_16(LinkReady->maxchargerate)/100));
+	printf("Slave ID 0x%04X, ",bswap_16(LinkReady->slave_TWCID));
+	printf("Max Charge Rate %0.2fA, ",((float)bswap_16(LinkReady->max_charge_rate)/100));
 	printf("Sign 0x%02X\r\n\r\n",LinkReady->sign);
 	return(true);
 }
+
+bool DecodeSlaveHeartbeat(struct S_HEARTBEAT *Heartbeat)
+{
+	printf("Source TWCID 0x%04X, Dest TWCID 0x%04X ", bswap_16(Heartbeat->src_TWCID), bswap_16(Heartbeat->dest_TWCID));
+	switch (Heartbeat->status) {
+		case 0x00:
+			printf("Ready");
+			break;
+		case 0x01:
+			printf("Charging");
+			break;
+		case 0x02:
+			printf("Error");
+			break;		
+		case 0x03:
+			printf("Plugged in, do not charge");
+			break;
+		case 0x04:
+			printf("Plugged in, ready to charge or charge scheduled");
+			break;
+		case 0x05:
+			printf("Busy?");
+			break;
+		case 0x06:
+			printf("+Ack to Increase charge current by 2 amps");
+			break;
+		case 0x07:
+			printf("+Ack to Decrease charge current by 2 amps");
+			break;
+		case 0x08:
+			printf("Starting to charge?");
+			break;
+		case 0x09:
+			printf("+Ack to Limit power to <max current>");
+			break;
+		default:
+			printf("Unknown status (%d)", Heartbeat->status);
+	}
+	printf("\r\n");
+	printf("Slave Maximum Current %.02f, Actual Current %.02f\r\n\r\n", 
+			(float)bswap_16(Heartbeat->max_current) /100,
+			(float)bswap_16(Heartbeat->actual_current) / 100);
+}
+
 
 bool DecodeString(struct STRING *String)
 {
@@ -277,9 +371,16 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 			DecodePowerStatus((struct POWERSTATUS *)buffer);
 			break;
 		case RESP_LINK_READY:
+			DecodeLinkReady((struct LINKREADY *)buffer);
+			// Respond with master heartbeat
+			SendMasterHeartbeat(fd, 1000);
+			break;			
 		case LINKREADY1:
 		case LINKREADY2:
 			DecodeLinkReady((struct LINKREADY *)buffer);
+			break;
+		case SLAVE_HEARTBEAT:
+			DecodeSlaveHeartbeat((struct S_HEARTBEAT *)buffer);
 			break;
 		case RESP_FIRMWARE_VER:
 			DecodeFirmware((struct FIRMWARE *)buffer);
@@ -322,6 +423,34 @@ int SendCommand(int fd, uint16_t command)
 	} else {
 		printf("Sent %d bytes\r\n\r\n",nbytes);
 	} 
+}
+
+int SendMasterHeartbeat(int fd, uint16_t max_current)
+{
+	int nbytes; 
+	struct M_HEARTBEAT heartbeat;
+	
+	heartbeat.startframe = 0xC0;
+	heartbeat.function = bswap_16(MASTER_HEATBEAT);
+	heartbeat.src_TWCID = bswap_16(0xA5A5);
+	heartbeat.dest_TWCID = bswap_16(0x9819);
+	heartbeat.command = 0x09;
+	heartbeat.max_current = bswap_16(1000);	// 10 Amps	
+	heartbeat.master_plug_inserted = 0x00; 	// 0x01 if master has plug inserted
+	heartbeat.payload_byte_5 = 0x00;	
+	heartbeat.payload_byte_6 = 0x00;	
+	heartbeat.payload_byte_7 = 0x00; 	
+	heartbeat.endframe = 0xC0;	
+	heartbeat.checksum = CalculateCheckSum((uint8_t *)&heartbeat, sizeof(heartbeat));
+	
+	PrintPacket((uint8_t *)&heartbeat, sizeof(heartbeat));
+	
+	if ((nbytes = write(fd, (uint8_t *)&heartbeat, sizeof(heartbeat))) < 0) {
+		perror("Write");
+	} else {
+		printf("Sent %d bytes\r\n\r\n",nbytes);
+	} 
+	
 }
 
 int InitCircularBuffer(struct CIRCULAR_BUFFER *cb)
@@ -483,7 +612,6 @@ int OpenRS485(const char *devname)
 
 int main(int argc, char **argv)
 {
-	int fd; 
 	
 	if ((fd = OpenRS485("/dev/ttyUSB0")) < 0)
 	{
