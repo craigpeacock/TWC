@@ -42,11 +42,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define START_CHARGING		0xFC1B
 #define STOP_CHARGING		0xFCB2
 
+
+
+#define LINKREADY1			0xFCE1
+#define LINKREADY2			0xFCE2
+
 // Responses (0xFD)
 #define RESP_SERIAL_NUMBER	0xFD19
 #define RESP_MODEL_NUMBER	0xFD1A
 #define RESP_FIRMWARE_VER	0xFD1B
-#define RESP_LINK_READY		0xFDE2
+#define RESP_LINK_READY		0xFDE2	
 #define RESP_HEART_BEAT		0xFDEB
 #define RESP_VIN_FIRST		0xFDEE
 #define RESP_VIN_MIDDLE		0xFDEF
@@ -114,6 +119,24 @@ struct STRING {
 	uint8_t		endframe;
 };
 
+struct LINKREADY {
+	uint8_t		startframe;			// Should be 0xC0
+	uint16_t	function;			// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
+	uint16_t	slaveTWCID;			// Tesla Wall Connector ID
+	uint8_t	sign;				
+	uint16_t	maxchargerate;
+	uint8_t		payload_byte_0;		
+	uint8_t		payload_byte_1;		
+	uint8_t		payload_byte_2;		
+	uint8_t		payload_byte_3;
+	uint8_t		payload_byte_4;
+	uint8_t		payload_byte_5;
+	uint8_t		payload_byte_6;
+	uint8_t		payload_byte_7;
+	uint8_t 	checksum;
+	uint8_t		endframe;
+};
+
 bool DecodeHeartBeat(struct HEARTBEAT *HeartBeat)
 {
 	printf("Master HeartBeat: ");
@@ -127,6 +150,32 @@ bool DecodeHeartBeat(struct HEARTBEAT *HeartBeat)
 bool DecodeFirmware(struct FIRMWARE *FirmwareVer)
 {
 	printf("Firmware Version %d.%d.%d\r\n\r\n", FirmwareVer->major, FirmwareVer->minor, FirmwareVer->revision);
+	return(true);
+}
+
+bool DecodeLinkReady(struct LINKREADY *LinkReady)
+{
+	switch(bswap_16(LinkReady->function)) {
+		case RESP_LINK_READY:
+			printf("LinkReady 0x%04X: ", bswap_16(LinkReady->function));
+			break;
+			
+		case LINKREADY1:
+			printf("LinkReady1 0x%04X: ", bswap_16(LinkReady->function));
+			break;
+			
+		case LINKREADY2:
+			printf("LinkReady2 0x%04X: ", bswap_16(LinkReady->function));
+			break;
+	
+		default:
+			printf("Unknown function: ");
+			break;
+	
+	}
+	printf("Slave ID 0x%04X, ",bswap_16(LinkReady->slaveTWCID));
+	printf("Max Charge Rate %0.2fA, ",((float)bswap_16(LinkReady->maxchargerate)/100));
+	printf("Sign 0x%02X\r\n\r\n",LinkReady->sign);
 	return(true);
 }
 
@@ -225,7 +274,9 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 			DecodeHeartBeat((struct HEARTBEAT *)buffer);
 			break;
 		case RESP_LINK_READY:
-			//DecodeLinkReady((LINKREADY *)buffer);
+		case LINKREADY1:
+		case LINKREADY2:
+			DecodeLinkReady((struct LINKREADY *)buffer);
 			break;
 		case RESP_FIRMWARE_VER:
 			DecodeFirmware((struct FIRMWARE *)buffer);
@@ -429,9 +480,13 @@ int OpenRS485(const char *devname)
 
 int main(int argc, char **argv)
 {
-	int fd; 	
-
-	fd = OpenRS485("/dev/ttyUSB0");
+	int fd; 
+	
+	if ((fd = OpenRS485("/dev/ttyUSB0")) < 0)
+	{
+		printf("Cannot open RS-485 port\r\n.");
+		return 0;
+	}
 		
 	printf("Port Opened\r\n");
 	
