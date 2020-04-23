@@ -73,7 +73,7 @@ struct CIRCULAR_BUFFER {
 struct POWERSTATUS {
 	uint8_t		startframe;
 	uint16_t	function;
-	uint16_t	TWCID;
+	uint16_t	src_TWCID;
 	uint32_t	totalkWh;
 	uint16_t	phase_a_volts;
 	uint16_t	phase_b_volts;
@@ -195,11 +195,11 @@ int SendMasterHeartbeat(int fd, uint16_t max_current);
 
 bool DecodePowerStatus(struct POWERSTATUS *PowerStatus)
 {
-	printf("PowerStatus (Master) : ");
-	printf("Total kWh since build : %lukWh, ", (long unsigned int)bswap_32(PowerStatus->totalkWh));
-	printf("Phase A : %dV %.0fA, ", 		bswap_16(PowerStatus->phase_a_volts), (float)PowerStatus->phase_a_current/2);
-	printf("Phase B : %dV %.0fA, ",         bswap_16(PowerStatus->phase_b_volts), (float)PowerStatus->phase_b_current/2);
-	printf("Phase C : %dV %.0fA\r\n\r\n",   bswap_16(PowerStatus->phase_c_volts), (float)PowerStatus->phase_c_current/2);
+	printf("Power stats from TWC%04X: ", bswap_16(PowerStatus->src_TWCID));
+	printf("Total kWh since build: %lukWh, ", (long unsigned int)bswap_32(PowerStatus->totalkWh));
+	printf("Phase A: %dV %.0fA, ", 		bswap_16(PowerStatus->phase_a_volts), (float)PowerStatus->phase_a_current/2);
+	printf("Phase B: %dV %.0fA, ",         bswap_16(PowerStatus->phase_b_volts), (float)PowerStatus->phase_b_current/2);
+	printf("Phase C: %dV %.0fA\r\n\r\n",   bswap_16(PowerStatus->phase_c_volts), (float)PowerStatus->phase_c_current/2);
 	return(true);
 }
 
