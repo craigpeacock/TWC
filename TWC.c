@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdbool.h>
 #include <byteswap.h>
 #include <stdlib.h>
+#include <time.h>
 
 // Commands from https://teslamotorsclub.com/tmc/posts/3225600/
 // Commands with reponses (0xFB)
@@ -43,7 +44,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define GET_VIN_LAST		0xFBF1
 
 // Commands without responses (0xFC)
-#define START_CHARGING		0xFC1B
+#define START_CHARGING		0xFCB1
 #define STOP_CHARGING		0xFCB2
 #define LINKREADY1			0xFCE1
 
@@ -183,8 +184,8 @@ struct PLUGSTATE {
 struct LINKREADY {
 	uint8_t		startframe;			// Should be 0xC0
 	uint16_t	function;			// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
-	uint16_t	slave_TWCID;			// Tesla Wall Connector ID
-	uint8_t	sign;				
+	uint16_t	slave_TWCID;		// Tesla Wall Connector ID
+	uint8_t		sign;				
 	uint16_t	max_charge_rate;
 	uint8_t		payload_byte_0;		
 	uint8_t		payload_byte_1;		
@@ -417,8 +418,6 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 			break;
 		case RESP_LINK_READY:
 			DecodeLinkReady((struct LINKREADY *)buffer);
-			// Respond with master heartbeat
-			SendMasterHeartbeat(fd, 1000);
 			break;			
 		case LINKREADY1:
 		case LINKREADY2:
@@ -481,7 +480,7 @@ int SendMasterHeartbeat(int fd, uint16_t max_current)
 	heartbeat.src_TWCID = bswap_16(0xA5A5);
 	heartbeat.dest_TWCID = bswap_16(0x9819);
 	heartbeat.command = 0x09;
-	heartbeat.max_current = bswap_16(1000);	// 10 Amps	
+	heartbeat.max_current = bswap_16(max_current);		
 	heartbeat.master_plug_inserted = 0x00; 	// 0x01 if master has plug inserted
 	heartbeat.payload_byte_5 = 0x00;	
 	heartbeat.payload_byte_6 = 0x00;	
@@ -660,6 +659,9 @@ int OpenRS485(const char *devname)
 
 int main(int argc, char **argv)
 {
+	struct timespec ts;
+	time_t oldtime;
+	
 	
 	if ((fd = OpenRS485("/dev/ttyUSB0")) < 0)
 	{
@@ -677,13 +679,26 @@ int main(int argc, char **argv)
 	//SendCommand(fd, GET_SERIAL_NUMBER, 0x9819, 0x0000);
 	//SendCommand(fd, GET_MODEL_NUMBER, 0x9819, 0x0000);
 	//SendCommand(fd, GET_VIN_FIRST, 0x0000, 0x9819);
-	SendCommand(fd, GET_PLUG_STATE, 0x0000, 0x0000);
+	//SendCommand(fd, START_CHARGING, 0xAA55, 0x9819);
+	//SendCommand(fd, STOP_CHARGING, 0xAA55, 0x9819);
+	//SendCommand(fd, GET_PLUG_STATE, 0x0000, 0x0000);
+		
+	clock_gettime(CLOCK_REALTIME, &ts);
+	oldtime = ts.tv_sec;
 	
 	do {
 		ReadSerialCircularBuffer(fd, &cir_buf);
 		ExamineCircularBuffer(&cir_buf);
-		usleep(50000);
-		//sleep(1);
+		usleep(10000);
+		
+		clock_gettime(CLOCK_REALTIME, &ts);
+		if (ts.tv_sec != oldtime) {
+
+			// Respond with master heartbeat
+			SendMasterHeartbeat(fd, 700);
+			
+			oldtime = ts.tv_sec;
+		}
 		
 	} while(1);
 	
