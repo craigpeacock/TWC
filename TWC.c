@@ -131,15 +131,14 @@ struct S_HEARTBEAT {
 struct PACKET {
 	uint8_t		startframe;
 	uint16_t	function;
-	uint16_t	TWCID;
+	uint16_t	src_TWCID;
+	uint16_t	dest_TWCID;
 	uint8_t		payload_byte_0;
 	uint8_t		payload_byte_1;
 	uint8_t		payload_byte_2;
 	uint8_t		payload_byte_3;
 	uint8_t		payload_byte_4;
 	uint8_t		payload_byte_5;
-	uint8_t		payload_byte_6;
-	uint8_t		payload_byte_7;
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
@@ -189,9 +188,10 @@ struct LINKREADY {
 };
 
 int fd; 
+uint8_t VIN[22];
 
 int SendMasterHeartbeat(int fd, uint16_t max_current);
-
+int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id);
 
 bool DecodePowerStatus(struct POWERSTATUS *PowerStatus)
 {
@@ -290,11 +290,19 @@ bool DecodeString(struct STRING *String)
 			printf("Model Number %s\r\n", String->string);
 			break;
 		case RESP_VIN_FIRST:
-			printf("VIN Number:");
+			printf("Obtained first 7 bytes of VIN\r\n\r\n");
+			strncpy(&VIN[0], &String->string[2],7);
+			SendCommand(fd, GET_VIN_MIDDLE, 0x0000, 0x9819);
+			break;
 		case RESP_VIN_MIDDLE:
+			printf("Obtained middle 7 bytes of VIN\r\n\r\n");
+			strncpy(&VIN[7], &String->string[2],7);
+			SendCommand(fd, GET_VIN_LAST, 0x0000, 0x9819);
+			break;
 		case RESP_VIN_LAST:		
-			String->string[10] = '\0';
-			printf("%s", &String->string[2]);
+			strncpy(&VIN[14], &String->string[2],7);
+			VIN[20] = '\0';
+			printf("VIN: %s\r\n\r\n", VIN);
 			break;
 		default:
 			printf("Unknown String\r\n");
@@ -400,22 +408,21 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 	}
 }
 
-int SendCommand(int fd, uint16_t command)
+int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id)
 {
 	int nbytes; 
 	struct PACKET packet;
 	
 	packet.startframe = 0xC0;
 	packet.function = bswap_16(command);
-	packet.TWCID = bswap_16(0x9819);
+	packet.src_TWCID = bswap_16(src_id);
+	packet.dest_TWCID = bswap_16(dest_id);
 	packet.payload_byte_0 = 0x00;
 	packet.payload_byte_1 = 0x00;
 	packet.payload_byte_2 = 0x00;
 	packet.payload_byte_3 = 0x00;
 	packet.payload_byte_4 = 0x00;
 	packet.payload_byte_5 = 0x00;
-	packet.payload_byte_6 = 0x00;
-	packet.payload_byte_7 = 0x00;
 	packet.endframe = 0xC0;	
 	packet.checksum = CalculateCheckSum((uint8_t *)&packet, sizeof(packet));
 	
@@ -630,9 +637,10 @@ int main(int argc, char **argv)
 	cir_buf.max = 256;
 	InitCircularBuffer(&cir_buf);
 	
-	//SendCommand(fd, GET_FIRMWARE_VER);
-	//SendCommand(fd, GET_SERIAL_NUMBER);
-	//SendCommand(fd, GET_MODEL_NUMBER);
+	//SendCommand(fd, GET_FIRMWARE_VER, 0x9819, 0x0000);
+	//SendCommand(fd, GET_SERIAL_NUMBER, 0x9819, 0x0000);
+	//SendCommand(fd, GET_MODEL_NUMBER, 0x9819, 0x0000);
+	SendCommand(fd, GET_VIN_FIRST, 0x0000, 0x9819);
 	
 	do {
 		ReadSerialCircularBuffer(fd, &cir_buf);
