@@ -603,6 +603,8 @@ int OpenRS485(const char *devname)
 	
 	options.c_lflag &= ~ECHO;
 	
+	options.c_lflag &= ~ISIG;
+	
 	options.c_lflag &= ~ICANON;	// Disable canonical mode
 	options.c_cc[VMIN]=0;		// Minimum number of characters in noncanonical mode
 	options.c_cc[VTIME]=0;		// timeout in deciseconds
