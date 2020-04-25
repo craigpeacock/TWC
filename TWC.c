@@ -51,6 +51,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define RESP_SERIAL_NUMBER	0xFD19
 #define RESP_MODEL_NUMBER	0xFD1A
 #define RESP_FIRMWARE_VER	0xFD1B
+#define RESP_PLUG_STATE		0xFDB4
 
 #define SLAVE_HEARTBEAT		0xFDE0
 
@@ -169,6 +170,16 @@ struct STRING {
 	uint8_t		endframe;
 };
 
+struct PLUGSTATE {
+	uint8_t		startframe;
+	uint16_t	function;
+	uint16_t	src_TWCID;
+	uint8_t		plug_state;
+	uint8_t		payload_byte[10];
+	uint8_t 	checksum;
+	uint8_t		endframe;
+};
+
 struct LINKREADY {
 	uint8_t		startframe;			// Should be 0xC0
 	uint16_t	function;			// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
@@ -207,6 +218,29 @@ bool DecodeFirmware(struct FIRMWARE *FirmwareVer)
 {
 	printf("Firmware Version %d.%d.%d\r\n\r\n", FirmwareVer->major, FirmwareVer->minor, FirmwareVer->revision);
 	return(true);
+}
+
+bool DecodePlugState(struct PLUGSTATE *PlugState)
+{
+	printf("Plug state from TWC%04X: ", bswap_16(PlugState->src_TWCID));
+	switch (PlugState->plug_state) {
+		case 0x00:
+			printf("Unplugged\r\n\r\n");
+			break;
+		case 0x01:
+			printf("Charging\r\n\r\n");
+			break;
+		case 0x02:
+			printf("??\r\n\r\n");
+			break;
+		case 0x03:
+			printf("Plugged in, but not charging\r\n\r\n");
+			break;
+		default:
+			printf("Unknown status %d\r\n\r\n",PlugState->plug_state);
+			break;
+	}
+	
 }
 
 bool DecodeLinkReady(struct LINKREADY *LinkReady)
@@ -403,6 +437,8 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 		case RESP_VIN_LAST:
 			DecodeString((struct STRING *)buffer);
 			break;
+		case RESP_PLUG_STATE:
+			DecodePlugState((struct PLUGSTATE *)buffer);
 		default:
 			break;
 	}
@@ -640,7 +676,8 @@ int main(int argc, char **argv)
 	//SendCommand(fd, GET_FIRMWARE_VER, 0x9819, 0x0000);
 	//SendCommand(fd, GET_SERIAL_NUMBER, 0x9819, 0x0000);
 	//SendCommand(fd, GET_MODEL_NUMBER, 0x9819, 0x0000);
-	SendCommand(fd, GET_VIN_FIRST, 0x0000, 0x9819);
+	//SendCommand(fd, GET_VIN_FIRST, 0x0000, 0x9819);
+	SendCommand(fd, GET_PLUG_STATE, 0x0000, 0x0000);
 	
 	do {
 		ReadSerialCircularBuffer(fd, &cir_buf);
