@@ -77,12 +77,12 @@ struct POWERSTATUS {
 	uint16_t	function;
 	uint16_t	src_TWCID;
 	uint32_t	totalkWh;
-	uint16_t	phase_a_volts;
-	uint16_t	phase_b_volts;
-	uint16_t	phase_c_volts;
-	uint8_t		phase_a_current;
-	uint8_t		phase_b_current;
-	uint8_t		phase_c_current;
+	uint16_t	line1_volts;
+	uint16_t	line2_volts;
+	uint16_t	line3_volts;
+	uint8_t		line1_current;
+	uint8_t		line2_current;
+	uint8_t		line3_current;
 };
 
 struct M_HEARTBEAT {
@@ -99,9 +99,7 @@ struct M_HEARTBEAT {
 						// 0x09 Limit power to <max current> (Protocol 2)
 	uint16_t	max_current;		// Maximum current slave can draw 
 	uint8_t		master_plug_inserted; 	// 0x01 if master has plug inserted
-	uint8_t		payload_byte_5;		// Always zero
-	uint8_t		payload_byte_6;		// Always zero
-	uint8_t		payload_byte_7;		// Always zero
+	uint8_t		payload_byte[3];	// Always zero
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
@@ -123,8 +121,7 @@ struct S_HEARTBEAT {
 						// 0x09 +Ack to Limit power to <max current> (Protocol 2)
 	uint16_t	max_current;		// Maximum current slave can draw 
 	uint16_t	actual_current;		// Actual current being drawn by car connected to slave
-	uint8_t		payload_byte_6;		// Always zero
-	uint8_t		payload_byte_7;		// Always zero
+	uint8_t		payload_byte[2];	// Always zero
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
@@ -135,12 +132,7 @@ struct PACKET {
 	uint16_t	function;
 	uint16_t	src_TWCID;
 	uint16_t	dest_TWCID;
-	uint8_t		payload_byte_0;
-	uint8_t		payload_byte_1;
-	uint8_t		payload_byte_2;
-	uint8_t		payload_byte_3;
-	uint8_t		payload_byte_4;
-	uint8_t		payload_byte_5;
+	uint8_t		payload_byte[6];
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
@@ -151,14 +143,7 @@ struct FIRMWARE {
 	uint8_t		major;
 	uint8_t		minor;
 	uint8_t		revision;
-	uint8_t		pad_byte_0;
-	uint8_t		pad_byte_1;
-	uint8_t		pad_byte_2;
-	uint8_t		pad_byte_3;
-	uint8_t		pad_byte_4;
-	uint8_t		pad_byte_5;
-	uint8_t		pad_byte_6;
-	uint8_t		pad_byte_7;
+	uint8_t		padload_byte[8];
 	uint8_t		checksum;
 	uint8_t		endframe;
 };
@@ -187,14 +172,7 @@ struct LINKREADY {
 	uint16_t	slave_TWCID;		// Tesla Wall Connector ID
 	uint8_t		sign;
 	uint16_t	max_charge_rate;
-	uint8_t		payload_byte_0;
-	uint8_t		payload_byte_1;
-	uint8_t		payload_byte_2;
-	uint8_t		payload_byte_3;
-	uint8_t		payload_byte_4;
-	uint8_t		payload_byte_5;
-	uint8_t		payload_byte_6;
-	uint8_t		payload_byte_7;
+	uint8_t		payload_byte[8];
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
@@ -209,9 +187,9 @@ bool DecodePowerStatus(struct POWERSTATUS *PowerStatus)
 {
 	printf("Power statistics from TWC%04X: ", bswap_16(PowerStatus->src_TWCID));
 	printf("Total kWh: %lukWh, ", (long unsigned int)bswap_32(PowerStatus->totalkWh));
-	printf("L1: %dV %.0fA, ",	bswap_16(PowerStatus->phase_a_volts), (float)PowerStatus->phase_a_current/2);
-	printf("L2: %dV %.0fA, ",	bswap_16(PowerStatus->phase_b_volts), (float)PowerStatus->phase_b_current/2);
-	printf("L3: %dV %.0fA\r\n\r\n",	bswap_16(PowerStatus->phase_c_volts), (float)PowerStatus->phase_c_current/2);
+	printf("L1: %dV %.0fA, ",	bswap_16(PowerStatus->line1_volts), (float)PowerStatus->line1_current/2);
+	printf("L2: %dV %.0fA, ",	bswap_16(PowerStatus->line2_volts), (float)PowerStatus->line2_current/2);
+	printf("L3: %dV %.0fA\r\n\r\n",	bswap_16(PowerStatus->line3_volts), (float)PowerStatus->line3_current/2);
 	return(true);
 }
 
@@ -452,12 +430,12 @@ int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id)
 	packet.function = bswap_16(command);
 	packet.src_TWCID = bswap_16(src_id);
 	packet.dest_TWCID = bswap_16(dest_id);
-	packet.payload_byte_0 = 0x00;
-	packet.payload_byte_1 = 0x00;
-	packet.payload_byte_2 = 0x00;
-	packet.payload_byte_3 = 0x00;
-	packet.payload_byte_4 = 0x00;
-	packet.payload_byte_5 = 0x00;
+	packet.payload_byte[0] = 0x00;
+	packet.payload_byte[1] = 0x00;
+	packet.payload_byte[2] = 0x00;
+	packet.payload_byte[3] = 0x00;
+	packet.payload_byte[4] = 0x00;
+	packet.payload_byte[5] = 0x00;
 	packet.endframe = 0xC0;
 	packet.checksum = CalculateCheckSum((uint8_t *)&packet, sizeof(packet));
 
@@ -482,9 +460,9 @@ int SendMasterHeartbeat(int fd, uint16_t max_current)
 	heartbeat.command = 0x09;
 	heartbeat.max_current = bswap_16(max_current);
 	heartbeat.master_plug_inserted = 0x00; 	// 0x01 if master has plug inserted
-	heartbeat.payload_byte_5 = 0x00;
-	heartbeat.payload_byte_6 = 0x00;
-	heartbeat.payload_byte_7 = 0x00;
+	heartbeat.payload_byte[0] = 0x00;
+	heartbeat.payload_byte[1] = 0x00;
+	heartbeat.payload_byte[2] = 0x00;
 	heartbeat.endframe = 0xC0;
 	heartbeat.checksum = CalculateCheckSum((uint8_t *)&heartbeat, sizeof(heartbeat));
 
