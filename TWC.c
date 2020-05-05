@@ -611,9 +611,22 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 		// Copy frame to new buffer and pass to functions for parsing
 		i = 0;
 		cb->tail = StartFrame;
-
+	
 		do {
-			buffer[i++] = cb->buffer[cb->tail];
+			buffer[i] = cb->buffer[cb->tail];
+	
+			// Check for escape bytes: TWC uses same scheme than SLIP
+			// https://en.wikipedia.org/wiki/Serial_Line_Internet_Protocol
+			if ((uint8_t)buffer[i] == 0xDB) {
+				// Reduce packet size
+				len--;
+				// Advance pointer to get next byte and check for rollover
+				if (++cb->tail >= cb->max) cb->tail = 0;
+				if (cb->buffer[cb->tail] == 0xDD) buffer[i] = 0xDB;
+				if (cb->buffer[cb->tail] == 0xDC) buffer[i] = 0xC0;
+			}
+			
+			i++;
 			if (++cb->tail >= cb->max) cb->tail = 0;
 		} while (i < len);
 
@@ -705,7 +718,7 @@ int main(int argc, char **argv)
 		if (ts.tv_sec != oldtime) {
 
 			// Respond with master heartbeat
-			//SendMasterHeartbeat(fd, 700);
+			SendMasterHeartbeat(fd, 700);
 
 			oldtime = ts.tv_sec;
 		}
