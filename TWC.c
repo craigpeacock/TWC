@@ -37,7 +37,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define GET_PLUG_STATE		0xFBB4
 
 #define MASTER_HEATBEAT		0xFBE0
-#define LINKREADY2			0xFBE2
+#define LINKREADY2		0xFBE2
 
 #define GET_VIN_FIRST		0xFBEE
 #define GET_VIN_MIDDLE		0xFBEF
@@ -46,7 +46,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 // Commands without responses (0xFC)
 #define START_CHARGING		0xFCB1
 #define STOP_CHARGING		0xFCB2
-#define LINKREADY1			0xFCE1
+#define LINKREADY1		0xFCE1
 
 // Responses (0xFD)
 #define RESP_SERIAL_NUMBER	0xFD19
@@ -65,11 +65,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #pragma pack(1)
 
 struct CIRCULAR_BUFFER {
-	uint8_t * buffer;
-	uint16_t head;
-	uint16_t tail;
-	uint16_t max;
-	bool full;
+	uint8_t 	* buffer;
+	uint16_t 	head;
+	uint16_t 	tail;
+	uint16_t 	max;
+	bool 		full;
 };
 
 struct POWERSTATUS {
@@ -86,19 +86,19 @@ struct POWERSTATUS {
 };
 
 struct M_HEARTBEAT {
-	uint8_t		startframe;			// Should be 0xC0
-	uint16_t	function;			// Should be 0xFBE0 
-	uint16_t	src_TWCID;			// Our address (Master)
-	uint16_t	dest_TWCID;			// Address of target slave 
-	uint8_t		command;			// 0x00 NOP 
-									// 0x02 Error
-									// 0x05 Limit power to <max current> (Protocol 1)
-									// 0x06 Increase charge current by 2 amps
-									// 0x07 Decrease charge current by 2 amps
-									// 0x08 Master ack slave stopped charging
-									// 0x09 Limit power to <max current> (Protocol 2)
+	uint8_t		startframe;		// Should be 0xC0
+	uint16_t	function;		// Should be 0xFBE0 
+	uint16_t	src_TWCID;		// Our address (Master)
+	uint16_t	dest_TWCID;		// Address of target slave 
+	uint8_t		command;		// 0x00 NOP 
+						// 0x02 Error
+						// 0x05 Limit power to <max current> (Protocol 1)
+						// 0x06 Increase charge current by 2 amps
+						// 0x07 Decrease charge current by 2 amps
+						// 0x08 Master ack slave stopped charging
+						// 0x09 Limit power to <max current> (Protocol 2)
 	uint16_t	max_current;		// Maximum current slave can draw 
-	uint8_t		master_plug_inserted; // 0x01 if master has plug inserted
+	uint8_t		master_plug_inserted; 	// 0x01 if master has plug inserted
 	uint8_t		payload_byte_5;		// Always zero
 	uint8_t		payload_byte_6;		// Always zero
 	uint8_t		payload_byte_7;		// Always zero
@@ -107,20 +107,20 @@ struct M_HEARTBEAT {
 };
 
 struct S_HEARTBEAT {
-	uint8_t		startframe;			// Should be 0xC0
-	uint16_t	function;			// Should be 0xFDE0 
-	uint16_t	src_TWCID;			// Address of Slave 
-	uint16_t	dest_TWCID;			// Address of Master 
-	uint8_t		status;				// 0x00 Ready
-									// 0x01	Charging
-									// 0x02 Error
-									// 0x03 Plugged in, do not charge
-									// 0x04 Plugged in, ready to charge or charge scheduled
-									// 0x05 Busy?
-									// 0x06 +Ack to Increase charge current by 2 amps
-									// 0x07 +Ack to Decrease charge current by 2 amps
-									// 0x08 Starting to charge?
-									// 0x09 +Ack to Limit power to <max current> (Protocol 2)
+	uint8_t		startframe;		// Should be 0xC0
+	uint16_t	function;		// Should be 0xFDE0 
+	uint16_t	src_TWCID;		// Address of Slave 
+	uint16_t	dest_TWCID;		// Address of Master 
+	uint8_t		status;			// 0x00 Ready
+						// 0x01	Charging
+						// 0x02 Error
+						// 0x03 Plugged in, do not charge
+						// 0x04 Plugged in, ready to charge or charge scheduled
+						// 0x05 Busy?
+						// 0x06 +Ack to Increase charge current by 2 amps
+						// 0x07 +Ack to Decrease charge current by 2 amps
+						// 0x08 Starting to charge?
+						// 0x09 +Ack to Limit power to <max current> (Protocol 2)
 	uint16_t	max_current;		// Maximum current slave can draw 
 	uint16_t	actual_current;		// Actual current being drawn by car connected to slave
 	uint8_t		payload_byte_6;		// Always zero
@@ -182,14 +182,14 @@ struct PLUGSTATE {
 };
 
 struct LINKREADY {
-	uint8_t		startframe;			// Should be 0xC0
-	uint16_t	function;			// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
+	uint8_t		startframe;		// Should be 0xC0
+	uint16_t	function;		// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
 	uint16_t	slave_TWCID;		// Tesla Wall Connector ID
-	uint8_t		sign;				
+	uint8_t		sign;
 	uint16_t	max_charge_rate;
-	uint8_t		payload_byte_0;		
-	uint8_t		payload_byte_1;		
-	uint8_t		payload_byte_2;		
+	uint8_t		payload_byte_0;
+	uint8_t		payload_byte_1;
+	uint8_t		payload_byte_2;
 	uint8_t		payload_byte_3;
 	uint8_t		payload_byte_4;
 	uint8_t		payload_byte_5;
@@ -199,7 +199,7 @@ struct LINKREADY {
 	uint8_t		endframe;
 };
 
-int fd; 
+int fd;
 uint8_t VIN[22];
 
 int SendMasterHeartbeat(int fd, uint16_t max_current);
@@ -241,7 +241,7 @@ bool DecodePlugState(struct PLUGSTATE *PlugState)
 			printf("Unknown status %d\r\n\r\n",PlugState->plug_state);
 			break;
 	}
-	
+
 }
 
 bool DecodeLinkReady(struct LINKREADY *LinkReady)
@@ -250,19 +250,19 @@ bool DecodeLinkReady(struct LINKREADY *LinkReady)
 		case RESP_LINK_READY:
 			printf("LinkReady 0x%04X: ", bswap_16(LinkReady->function));
 			break;
-			
+
 		case LINKREADY1:
 			printf("LinkReady1 0x%04X: ", bswap_16(LinkReady->function));
 			break;
-			
+
 		case LINKREADY2:
 			printf("LinkReady2 0x%04X: ", bswap_16(LinkReady->function));
 			break;
-	
+
 		default:
 			printf("Unknown function: ");
 			break;
-	
+
 	}
 	printf("Slave ID 0x%04X, ",bswap_16(LinkReady->slave_TWCID));
 	printf("Max Charge Rate %0.2fA, ",((float)bswap_16(LinkReady->max_charge_rate)/100));
@@ -282,7 +282,7 @@ bool DecodeSlaveHeartbeat(struct S_HEARTBEAT *Heartbeat)
 			break;
 		case 0x02:
 			printf("Error");
-			break;		
+			break;
 		case 0x03:
 			printf("Plugged in, do not charge");
 			break;
@@ -308,7 +308,7 @@ bool DecodeSlaveHeartbeat(struct S_HEARTBEAT *Heartbeat)
 			printf("Unknown status (%d)", Heartbeat->status);
 	}
 	printf("\r\n");
-	printf("Slave Maximum Current %.02f, Actual Current %.02f\r\n\r\n", 
+	printf("Slave Maximum Current %.02f, Actual Current %.02f\r\n\r\n",
 			(float)bswap_16(Heartbeat->max_current) /100,
 			(float)bswap_16(Heartbeat->actual_current) / 100);
 }
@@ -334,7 +334,7 @@ bool DecodeString(struct STRING *String)
 			strncpy(&VIN[7], &String->string[2],7);
 			SendCommand(fd, GET_VIN_LAST, 0x0000, 0x9819);
 			break;
-		case RESP_VIN_LAST:		
+		case RESP_VIN_LAST:
 			strncpy(&VIN[14], &String->string[2],7);
 			VIN[20] = '\0';
 			printf("VIN: %s\r\n\r\n", VIN);
@@ -351,7 +351,7 @@ bool PrintPacket(uint8_t *buffer, uint8_t nbytes)
 	printf("> %d bytes:",nbytes);
 	for (i = 0; i < nbytes; i++)
 		printf(" %02X", (uint8_t)buffer[i]);
-	printf("\r\n");	
+	printf("\r\n");
 }
 
 bool VerifyCheckSum(uint8_t *buffer, uint8_t nbytes)
@@ -359,24 +359,24 @@ bool VerifyCheckSum(uint8_t *buffer, uint8_t nbytes)
 	uint8_t i;
 	uint8_t endbyte = 0;
 	uint8_t checksum = 0;
-	
-	// Message should always begin with a 0xC0 start byte	
+
+	// Message should always begin with a 0xC0 start byte
 	if (buffer[0] != 0xC0) printf("Start byte incorrect\r\n");
-	
+
 	// Now find the endbyte
 	for (i = 1; i < nbytes; i++) {
-		if ((unsigned char)buffer[i] == 0xC0) endbyte = i; 
+		if ((unsigned char)buffer[i] == 0xC0) endbyte = i;
 	}
 	//printf("Endbyte = %d",endbyte);
 
-	// Calculate the checksum. 
+	// Calculate the checksum.
 	// The checksum is the sum of all the databytes excluding the first byte after the start byte
 	for (uint8_t i = 2; i < endbyte - 2; i++) {
 		checksum = checksum + (unsigned char)buffer[i];
 	}
 	//printf("Checksum = %02X\r\n",checksum);
-	
-	if ((unsigned char)buffer[endbyte -1] == checksum) 
+
+	if ((unsigned char)buffer[endbyte -1] == checksum)
 		return true;
 	else
 		return false;
@@ -387,17 +387,17 @@ uint8_t CalculateCheckSum(uint8_t *buffer, uint8_t nbytes)
 	uint8_t i;
 	uint8_t endbyte = 0;
 	uint8_t checksum = 0;
-	
-	// Message should always begin with a 0xC0 start byte	
+
+	// Message should always begin with a 0xC0 start byte
 	if (buffer[0] != 0xC0) printf("Start byte incorrect\r\n");
-	
+
 	// Now find the endbyte
 	for (i = 1; i < nbytes; i++) {
-		if ((unsigned char)buffer[i] == 0xC0) endbyte = i; 
+		if ((unsigned char)buffer[i] == 0xC0) endbyte = i;
 	}
 	//printf("Endbyte = %d",endbyte);
 
-	// Calculate the checksum. 
+	// Calculate the checksum.
 	// The checksum is the sum of all the databytes excluding the first byte after the start byte
 	for (uint8_t i = 2; i < endbyte - 2; i++) {
 		checksum = checksum + (unsigned char)buffer[i];
@@ -411,14 +411,14 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 {
 	struct PACKET *packet = (struct PACKET *)buffer;
 	//printf("Processing Packet");
-	
+
 	switch (bswap_16(packet->function)) {
-		case RESP_PWR_STATUS: 	
+		case RESP_PWR_STATUS:
 			DecodePowerStatus((struct POWERSTATUS *)buffer);
 			break;
 		case RESP_LINK_READY:
 			DecodeLinkReady((struct LINKREADY *)buffer);
-			break;			
+			break;
 		case LINKREADY1:
 		case LINKREADY2:
 			DecodeLinkReady((struct LINKREADY *)buffer);
@@ -445,9 +445,9 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 
 int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id)
 {
-	int nbytes; 
+	int nbytes;
 	struct PACKET packet;
-	
+
 	packet.startframe = 0xC0;
 	packet.function = bswap_16(command);
 	packet.src_TWCID = bswap_16(src_id);
@@ -458,44 +458,44 @@ int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id)
 	packet.payload_byte_3 = 0x00;
 	packet.payload_byte_4 = 0x00;
 	packet.payload_byte_5 = 0x00;
-	packet.endframe = 0xC0;	
+	packet.endframe = 0xC0;
 	packet.checksum = CalculateCheckSum((uint8_t *)&packet, sizeof(packet));
-	
+
 	PrintPacket((uint8_t *)&packet, sizeof(packet));
-	
+
 	if ((nbytes = write(fd, (uint8_t *)&packet, sizeof(packet))) < 0) {
 		perror("Write");
 	} else {
 		printf("Sent %d bytes\r\n\r\n",nbytes);
-	} 
+	}
 }
 
 int SendMasterHeartbeat(int fd, uint16_t max_current)
 {
-	int nbytes; 
+	int nbytes;
 	struct M_HEARTBEAT heartbeat;
-	
+
 	heartbeat.startframe = 0xC0;
 	heartbeat.function = bswap_16(MASTER_HEATBEAT);
 	heartbeat.src_TWCID = bswap_16(0xA5A5);
 	heartbeat.dest_TWCID = bswap_16(0x9819);
 	heartbeat.command = 0x09;
-	heartbeat.max_current = bswap_16(max_current);		
+	heartbeat.max_current = bswap_16(max_current);
 	heartbeat.master_plug_inserted = 0x00; 	// 0x01 if master has plug inserted
-	heartbeat.payload_byte_5 = 0x00;	
-	heartbeat.payload_byte_6 = 0x00;	
-	heartbeat.payload_byte_7 = 0x00; 	
-	heartbeat.endframe = 0xC0;	
+	heartbeat.payload_byte_5 = 0x00;
+	heartbeat.payload_byte_6 = 0x00;
+	heartbeat.payload_byte_7 = 0x00;
+	heartbeat.endframe = 0xC0;
 	heartbeat.checksum = CalculateCheckSum((uint8_t *)&heartbeat, sizeof(heartbeat));
-	
+
 	PrintPacket((uint8_t *)&heartbeat, sizeof(heartbeat));
-	
+
 	if ((nbytes = write(fd, (uint8_t *)&heartbeat, sizeof(heartbeat))) < 0) {
 		perror("Write");
 	} else {
 		printf("Sent %d bytes\r\n\r\n",nbytes);
-	} 
-	
+	}
+
 }
 
 int InitCircularBuffer(struct CIRCULAR_BUFFER *cb)
@@ -525,11 +525,11 @@ int ReadSerialCircularBuffer(int fd, struct CIRCULAR_BUFFER *cb)
 	char buffer[32];
 
 	do {
-		// Read from serial port... 	
+		// Read from serial port...
 		if ((nbytes = read(fd, &buffer, sizeof(buffer))) < 0) {
 			perror("Read");
 			return 1;
-		} 
+		}
 		// ...and copy to circular buffer
 		if (nbytes != 0) {
 			//printf("Read %d bytes ",nbytes);
@@ -547,20 +547,20 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 {
 	uint16_t i = cb->tail;
 	uint16_t len;
-	
+
 	bool StartFrameFound = 0;
 	uint16_t StartFrame = 0;
-	
+
 	bool EndFrameFound = 0;
 	uint16_t EndFrame = 0;
-	
+
 	//printf("Examining circular buffer @ %d\r\n", cb->tail);
-	
+
 	char buffer[64];
 
 	do {
 		// Find start and end byte positions
-		if (cb->buffer[i] == 0xC0) { 
+		if (cb->buffer[i] == 0xC0) {
 			if (!StartFrameFound) {
 				StartFrame = i;
 				StartFrameFound = true;
@@ -573,9 +573,9 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 		// Advance position and roll over if required
 		if (i++ >= cb->max) i = 0;
 	} while (i != cb->head);
-	
+
 	//printf("Start frame %03d, End frame %03d\r\n", StartFrame, EndFrame);
-	
+
 	if (!(StartFrameFound & EndFrameFound)) {
 		//printf("Packet Incomplete, abort.\r\n");
 	} else {
@@ -587,7 +587,7 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 			//Frame has rolled over
 			len = ((EndFrame + cb->max) - StartFrame) +1;
 		}
-		//printf("Start frame %03d, End frame %03d, Length %03d\r\n", StartFrame, EndFrame, len);		
+		//printf("Start frame %03d, End frame %03d, Length %03d\r\n", StartFrame, EndFrame, len);
 
 		if (len < 5) {
 			printf("Packet too short, ignoring\r\n");
@@ -596,18 +596,18 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 			cb->tail = EndFrame;
 			return 0;
 		}
-		
+
 		// Copy frame to new buffer and pass to functions for parsing
 		i = 0;
 		cb->tail = StartFrame;
-		
+
 		do {
 			buffer[i++] = cb->buffer[cb->tail];
 			if (++cb->tail >= cb->max) cb->tail = 0;
-		} while (i < len);  
-	
+		} while (i < len);
+
 		cb->tail == EndFrame + 1;
-		
+
 		PrintPacket(buffer, i);
 		if (VerifyCheckSum(buffer, i)) ProcessPacket(buffer, i);
 	}
@@ -615,16 +615,16 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 
 int OpenRS485(const char *devname)
 {
-	int fd; 
+	int fd;
 	struct termios options;
-		
+
 	if ((fd = open(devname, O_RDWR | O_NOCTTY | O_NDELAY)) < 0) {
 		perror("Open");
 		return 1;
-	} 
-	
+	}
+
 	// Set to blocking
-	fcntl(fd, F_SETFL, 0); 
+	fcntl(fd, F_SETFL, 0);
 
 	// Get port attributes
 	tcgetattr(fd, &options);
@@ -635,25 +635,25 @@ int OpenRS485(const char *devname)
 
 	// Clear all input modes
 	options.c_iflag = 0;
-	
+
 	// Set 8 bits, no parity, 1 stop bit
 	options.c_cflag &= ~PARENB;	// Clear parity generation
 	options.c_cflag &= ~CSTOPB;	// Clear two stop bits
 	options.c_cflag &= ~CSIZE;	// Clear Character size mask
 	options.c_cflag |= CS8;		// Set Character mask to 8 bits
 	options.c_cflag | CLOCAL;	// Ignore modem control lines
-	
+
 	options.c_lflag &= ~ECHO;
-	
+
 	options.c_lflag &= ~ISIG;
-	
+
 	options.c_lflag &= ~ICANON;	// Disable canonical mode
 	options.c_cc[VMIN]=0;		// Minimum number of characters in noncanonical mode
 	options.c_cc[VTIME]=0;		// timeout in deciseconds
-	
+
 	// Set port attributes
 	tcsetattr(fd, TCSAFLUSH, &options);
-	
+
 	return(fd);
 }
 
@@ -661,20 +661,19 @@ int main(int argc, char **argv)
 {
 	struct timespec ts;
 	time_t oldtime;
-	
-	
+
 	if ((fd = OpenRS485("/dev/ttyUSB0")) < 0)
 	{
 		printf("Cannot open RS-485 port\r\n.");
 		return 0;
 	}
-		
+
 	printf("Port Opened\r\n");
-	
+
 	struct CIRCULAR_BUFFER cir_buf;
 	cir_buf.max = 256;
 	InitCircularBuffer(&cir_buf);
-	
+
 	//SendCommand(fd, GET_FIRMWARE_VER, 0x9819, 0x0000);
 	//SendCommand(fd, GET_SERIAL_NUMBER, 0x9819, 0x0000);
 	//SendCommand(fd, GET_MODEL_NUMBER, 0x9819, 0x0000);
@@ -682,26 +681,26 @@ int main(int argc, char **argv)
 	//SendCommand(fd, START_CHARGING, 0xAA55, 0x9819);
 	//SendCommand(fd, STOP_CHARGING, 0xAA55, 0x9819);
 	//SendCommand(fd, GET_PLUG_STATE, 0x0000, 0x0000);
-		
+
 	clock_gettime(CLOCK_REALTIME, &ts);
 	oldtime = ts.tv_sec;
-	
+
 	do {
 		ReadSerialCircularBuffer(fd, &cir_buf);
 		ExamineCircularBuffer(&cir_buf);
 		usleep(10000);
-		
+
 		clock_gettime(CLOCK_REALTIME, &ts);
 		if (ts.tv_sec != oldtime) {
 
 			// Respond with master heartbeat
-			SendMasterHeartbeat(fd, 700);
-			
+			//SendMasterHeartbeat(fd, 700);
+
 			oldtime = ts.tv_sec;
 		}
-		
+
 	} while(1);
-	
+
 	FreeCircularBuffer(&cir_buf);
 
 	if (close(fd) < 0) {
