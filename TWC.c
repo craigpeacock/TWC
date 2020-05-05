@@ -17,7 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <stdio.h> 
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -161,9 +161,9 @@ struct S_HEARTBEAT {
 struct FIRMWARE {
 	uint8_t		startframe;
 	uint16_t	function;		// Should be 0xFD1B
-	uint8_t		major;			// Major version (BCD
-	uint8_t		minor;			// Minor version (BCD)
-	uint8_t		revision;		// Revision (BCD)
+	uint8_t		major;			// Major version
+	uint8_t		minor;			// Minor version
+	uint8_t		revision;		// Revision
 	uint8_t		dummy_bytes[8];
 	uint8_t		checksum;
 	uint8_t		endframe;
