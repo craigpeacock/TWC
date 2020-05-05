@@ -1,5 +1,5 @@
 /*
-Tesla Wall Connector Example
+Tesla Wall Connector (TWC) Example
 Copyright (C) 2020 Craig Peacock
 
 This program is free software; you can redistribute it and/or
@@ -56,7 +56,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #define SLAVE_HEARTBEAT		0xFDE0
 
-#define RESP_LINK_READY		0xFDE2		// Sent by slave on reset 
+#define RESP_LINK_READY		0xFDE2		// Sent by slave on reset
 #define RESP_PWR_STATUS		0xFDEB		// Sent by master on reset
 #define RESP_VIN_FIRST		0xFDEE
 #define RESP_VIN_MIDDLE		0xFDEF
@@ -72,43 +72,72 @@ struct CIRCULAR_BUFFER {
 	bool 		full;
 };
 
-struct POWERSTATUS {
-	uint8_t		startframe;
-	uint16_t	function;
-	uint16_t	src_TWCID;
-	uint32_t	totalkWh;
-	uint16_t	line1_volts;
-	uint16_t	line2_volts;
-	uint16_t	line3_volts;
-	uint8_t		line1_current;
-	uint8_t		line2_current;
-	uint8_t		line3_current;
+// PACKET: Basic packet structure. Used to send GET_* commands.
+// Each frame begins with a 0xC0 byte and ends with a 0xC0 byte.
+
+struct PACKET {
+	uint8_t		startframe;		// 0xC0
+	uint16_t	function;		// Function (command)
+	uint16_t	src_TWCID;		// Address of source TWC
+	uint16_t	dest_TWCID;		// Address of destination TWC
+	uint8_t		payload_byte[6];
+	uint8_t 	checksum;		// Checksum
+	uint8_t		endframe;		// 0xC0
 };
 
+// POWERSTATUS: Sent periodically from a master (approx every 2 seconds) with
+// power statistics such as total power delivered by the Tesla Wall Connector
+// since construction (totalkWh), line voltages and currents.
+
+struct POWERSTATUS {
+	uint8_t		startframe;
+	uint16_t	function;		// Should be 0xFDEB
+	uint16_t	src_TWCID;		// Address of source TWC
+	uint32_t	totalkWh;		// Total kWh since construction
+	uint16_t	line1_volts;		// Line Voltage
+	uint16_t	line2_volts;
+	uint16_t	line3_volts;
+	uint8_t		line1_current;		// Line Current * 2
+	uint8_t		line2_current;
+	uint8_t		line3_current;
+	uint8_t		dummy_bytes[2];
+	uint8_t 	checksum;
+	uint8_t		endframe;
+};
+
+// M_HEARTBEAT: Heartbeat packet sent by master. Used to tell slave to adjust
+// charging current. Packet must be sent regularly to prevent TWC entering a
+// fault (Red LED) mode. If there is no need to make any adjustments to
+// allocated current, you can send a NOP. Each Heartbeat will be acknowledged
+// with a slave heartbeat (S_HEARTBEAT)
+
 struct M_HEARTBEAT {
-	uint8_t		startframe;		// Should be 0xC0
-	uint16_t	function;		// Should be 0xFBE0 
+	uint8_t		startframe;
+	uint16_t	function;		// Should be 0xFBE0
 	uint16_t	src_TWCID;		// Our address (Master)
-	uint16_t	dest_TWCID;		// Address of target slave 
-	uint8_t		command;		// 0x00 NOP 
+	uint16_t	dest_TWCID;		// Address of target slave
+	uint8_t		command;		// 0x00 NOP
 						// 0x02 Error
 						// 0x05 Limit power to <max current> (Protocol 1)
 						// 0x06 Increase charge current by 2 amps
 						// 0x07 Decrease charge current by 2 amps
 						// 0x08 Master ack slave stopped charging
 						// 0x09 Limit power to <max current> (Protocol 2)
-	uint16_t	max_current;		// Maximum current slave can draw 
+	uint16_t	max_current;		// Maximum current slave can draw
 	uint8_t		master_plug_inserted; 	// 0x01 if master has plug inserted
-	uint8_t		payload_byte[3];	// Always zero
+	uint8_t		dummy_bytes[3];
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
 
+// S_HEARTBEAT: Heartbeat packet sent by slave. Used to acknowledge master
+// heartbeat and report maximum allocated and actual charging current.
+
 struct S_HEARTBEAT {
-	uint8_t		startframe;		// Should be 0xC0
-	uint16_t	function;		// Should be 0xFDE0 
-	uint16_t	src_TWCID;		// Address of Slave 
-	uint16_t	dest_TWCID;		// Address of Master 
+	uint8_t		startframe;
+	uint16_t	function;		// Should be 0xFDE0
+	uint16_t	src_TWCID;		// Address of Slave
+	uint16_t	dest_TWCID;		// Address of Master
 	uint8_t		status;			// 0x00 Ready
 						// 0x01	Charging
 						// 0x02 Error
@@ -119,60 +148,64 @@ struct S_HEARTBEAT {
 						// 0x07 +Ack to Decrease charge current by 2 amps
 						// 0x08 Starting to charge?
 						// 0x09 +Ack to Limit power to <max current> (Protocol 2)
-	uint16_t	max_current;		// Maximum current slave can draw 
+	uint16_t	max_current;		// Maximum current slave can draw
 	uint16_t	actual_current;		// Actual current being drawn by car connected to slave
-	uint8_t		payload_byte[2];	// Always zero
+	uint8_t		dummy_bytes[2];
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
 
-
-struct PACKET {
-	uint8_t		startframe;
-	uint16_t	function;
-	uint16_t	src_TWCID;
-	uint16_t	dest_TWCID;
-	uint8_t		payload_byte[6];
-	uint8_t 	checksum;
-	uint8_t		endframe;
-};
+// FIRMWARE: Response to GET_FIRMWARE_VER command containing firmware version
+// of the TWC.
 
 struct FIRMWARE {
 	uint8_t		startframe;
-	uint16_t	function;
-	uint8_t		major;
-	uint8_t		minor;
-	uint8_t		revision;
-	uint8_t		padload_byte[8];
+	uint16_t	function;		// Should be 0xFD1B
+	uint8_t		major;			// Major version (BCD
+	uint8_t		minor;			// Minor version (BCD)
+	uint8_t		revision;		// Revision (BCD)
+	uint8_t		dummy_bytes[8];
 	uint8_t		checksum;
 	uint8_t		endframe;
 };
+
+// STRING: Response to commands requesting a string. Strings are not normally
+// zero terminated.
 
 struct STRING {
 	uint8_t		startframe;
-	uint16_t	function;
-	uint8_t		string[11];
-	uint8_t		checksum;
+	uint16_t	function;		// Function code
+	uint8_t		string[11];		// ASCII string
+	uint8_t		checksum;		// Checksum
 	uint8_t		endframe;
 };
 
+// PLUGSTATE: Response to GET_PLUG_STATE command containing plug status of TWC.
+
 struct PLUGSTATE {
 	uint8_t		startframe;
-	uint16_t	function;
-	uint16_t	src_TWCID;
-	uint8_t		plug_state;
-	uint8_t		payload_byte[10];
+	uint16_t	function;		// Should be RESP_PLUG_STATE 0xFDB4
+	uint16_t	src_TWCID;		// Address of source TWC
+	uint8_t		plug_state;		// 0x00 Unplugged
+						// 0x01 Charging
+						// 0x02 <unknown>
+						// 0x03 Plugged in, but not charging
+	uint8_t		dummy_bytes[10];
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
 
+// LINKREADY: Sent periodically from a slave. A master should respond with a M_HEARTBEAT.
+// Used to advertise the presence of a slave and its TWCID. Also advertises the maximum
+// charge rate the hardware is capable of.
+
 struct LINKREADY {
-	uint8_t		startframe;		// Should be 0xC0
+	uint8_t		startframe;
 	uint16_t	function;		// 0xFCE1 LinkReady1 or 0xFCE2 LinkReady 2
-	uint16_t	slave_TWCID;		// Tesla Wall Connector ID
-	uint8_t		sign;
-	uint16_t	max_charge_rate;
-	uint8_t		payload_byte[8];
+	uint16_t	src_TWCID;		// Address of source TWC
+	uint8_t		sign;			// Random 'sign', not sure its purpose
+	uint16_t	max_charge_rate;	// Maximum charge rate in amps * 100
+	uint8_t		dummy_bytes[8];
 	uint8_t 	checksum;
 	uint8_t		endframe;
 };
@@ -242,7 +275,7 @@ bool DecodeLinkReady(struct LINKREADY *LinkReady)
 			break;
 
 	}
-	printf("Slave ID 0x%04X, ",bswap_16(LinkReady->slave_TWCID));
+	printf("Slave ID 0x%04X, ",bswap_16(LinkReady->src_TWCID));
 	printf("Max Charge Rate %0.2fA, ",((float)bswap_16(LinkReady->max_charge_rate)/100));
 	printf("Sign 0x%02X\r\n\r\n",LinkReady->sign);
 	return(true);
@@ -460,9 +493,9 @@ int SendMasterHeartbeat(int fd, uint16_t max_current)
 	heartbeat.command = 0x09;
 	heartbeat.max_current = bswap_16(max_current);
 	heartbeat.master_plug_inserted = 0x00; 	// 0x01 if master has plug inserted
-	heartbeat.payload_byte[0] = 0x00;
-	heartbeat.payload_byte[1] = 0x00;
-	heartbeat.payload_byte[2] = 0x00;
+	heartbeat.dummy_bytes[0] = 0x00;
+	heartbeat.dummy_bytes[1] = 0x00;
+	heartbeat.dummy_bytes[2] = 0x00;
 	heartbeat.endframe = 0xC0;
 	heartbeat.checksum = CalculateCheckSum((uint8_t *)&heartbeat, sizeof(heartbeat));
 
