@@ -281,9 +281,44 @@ bool DecodeLinkReady(struct LINKREADY *LinkReady)
 	return(true);
 }
 
+
+bool DecodeMasterHeartbeat(struct M_HEARTBEAT * Heartbeat)
+{
+	printf("Master Heartbeat: Src 0x%04X, Dest 0x%04X ", bswap_16(Heartbeat->src_TWCID), bswap_16(Heartbeat->dest_TWCID));
+	switch (Heartbeat->command) {
+		case 0x00:
+			printf("NOP");
+			break;
+		case 0x02:
+			printf("Error");
+			break;
+		case 0x05:
+			printf("Limit current to %.02f", (float)bswap_16(Heartbeat->max_current) /100);
+			break;
+		case 0x06:
+			printf("Increase charge current by 2 amps");
+			break;
+		case 0x07:
+			printf("Decrease charge current by 2 amps");
+			break;
+		case 0x08:
+			printf("Ack Slave has stopped charging");
+			break;
+		case 0x09:
+			printf("Limit current to %.02f", (float)bswap_16(Heartbeat->max_current) /100);
+			break;
+		default:
+			printf("Unknown status (%d)", Heartbeat->command);
+	}
+	printf("\r\n");
+	
+	
+	
+}
+
 bool DecodeSlaveHeartbeat(struct S_HEARTBEAT *Heartbeat)
 {
-	printf("Source TWCID 0x%04X, Dest TWCID 0x%04X ", bswap_16(Heartbeat->src_TWCID), bswap_16(Heartbeat->dest_TWCID));
+	printf("Slave Heartbeat: Src 0x%04X, Dest 0x%04X ", bswap_16(Heartbeat->src_TWCID), bswap_16(Heartbeat->dest_TWCID));
 	switch (Heartbeat->status) {
 		case 0x00:
 			printf("Ready");
@@ -500,12 +535,15 @@ int SendMasterHeartbeat(int fd, uint16_t max_current)
 	heartbeat.checksum = CalculateCheckSum((uint8_t *)&heartbeat, sizeof(heartbeat));
 
 	PrintPacket((uint8_t *)&heartbeat, sizeof(heartbeat));
-
+	DecodeMasterHeartbeat(&heartbeat);	
+	
 	if ((nbytes = write(fd, (uint8_t *)&heartbeat, sizeof(heartbeat))) < 0) {
 		perror("Write");
 	} else {
 		printf("Sent %d bytes\r\n\r\n",nbytes);
 	}
+	
+	
 
 }
 
