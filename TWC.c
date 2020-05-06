@@ -148,7 +148,8 @@ struct S_HEARTBEAT {
 						// 0x07 +Ack to Decrease charge current by 2 amps
 						// 0x08 Starting to charge?
 						// 0x09 +Ack to Limit power to <max current> (Protocol 2)
-	uint16_t	max_current;		// Maximum current slave can draw
+	uint16_t	max_current;		// Maximum current slave can draw. Only valid when slave
+						// is connected to vehicle, otherwise reports zero.
 	uint16_t	actual_current;		// Actual current being drawn by car connected to slave
 	uint8_t		dummy_bytes[2];
 	uint8_t 	checksum;
@@ -212,8 +213,10 @@ struct LINKREADY {
 
 int fd;
 uint8_t VIN[22];
+uint16_t Slave_TWCID;
+uint16_t Master_TWCID = 0xA5A5;
 
-int SendMasterHeartbeat(int fd, uint16_t max_current);
+int SendMasterHeartbeat(int fd, uint16_t Slave_TWCID, uint16_t max_current);
 int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id);
 
 bool DecodePowerStatus(struct POWERSTATUS *PowerStatus)
@@ -311,9 +314,6 @@ bool DecodeMasterHeartbeat(struct M_HEARTBEAT * Heartbeat)
 			printf("Unknown status (%d)", Heartbeat->command);
 	}
 	printf("\r\n");
-	
-	
-	
 }
 
 bool DecodeSlaveHeartbeat(struct S_HEARTBEAT *Heartbeat)
@@ -464,6 +464,9 @@ bool ProcessPacket(uint8_t *buffer, uint8_t nbytes)
 			break;
 		case RESP_LINK_READY:
 			DecodeLinkReady((struct LINKREADY *)buffer);
+			// Slave has advertised its address. Copy to Slave_TWCID and use
+			// this for subsequent communication.
+			Slave_TWCID = bswap_16(packet->src_TWCID);
 			break;
 		case LINKREADY1:
 		case LINKREADY2:
@@ -516,15 +519,15 @@ int SendCommand(int fd, uint16_t command, uint16_t src_id, uint16_t dest_id)
 	}
 }
 
-int SendMasterHeartbeat(int fd, uint16_t max_current)
+int SendMasterHeartbeat(int fd, uint16_t Slave_TWCID, uint16_t max_current)
 {
 	int nbytes;
 	struct M_HEARTBEAT heartbeat;
 
 	heartbeat.startframe = 0xC0;
 	heartbeat.function = bswap_16(MASTER_HEATBEAT);
-	heartbeat.src_TWCID = bswap_16(0xA5A5);
-	heartbeat.dest_TWCID = bswap_16(0x9819);
+	heartbeat.src_TWCID = bswap_16(Master_TWCID);
+	heartbeat.dest_TWCID = bswap_16(Slave_TWCID);
 	heartbeat.command = 0x09;
 	heartbeat.max_current = bswap_16(max_current);
 	heartbeat.master_plug_inserted = 0x00; 	// 0x01 if master has plug inserted
@@ -535,16 +538,13 @@ int SendMasterHeartbeat(int fd, uint16_t max_current)
 	heartbeat.checksum = CalculateCheckSum((uint8_t *)&heartbeat, sizeof(heartbeat));
 
 	PrintPacket((uint8_t *)&heartbeat, sizeof(heartbeat));
-	DecodeMasterHeartbeat(&heartbeat);	
-	
+	DecodeMasterHeartbeat(&heartbeat);
+
 	if ((nbytes = write(fd, (uint8_t *)&heartbeat, sizeof(heartbeat))) < 0) {
 		perror("Write");
 	} else {
 		printf("Sent %d bytes\r\n\r\n",nbytes);
 	}
-	
-	
-
 }
 
 int InitCircularBuffer(struct CIRCULAR_BUFFER *cb)
@@ -649,10 +649,10 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 		// Copy frame to new buffer and pass to functions for parsing
 		i = 0;
 		cb->tail = StartFrame;
-	
+
 		do {
 			buffer[i] = cb->buffer[cb->tail];
-	
+
 			// Check for escape bytes: TWC uses same scheme than SLIP
 			// https://en.wikipedia.org/wiki/Serial_Line_Internet_Protocol
 			if ((uint8_t)buffer[i] == 0xDB) {
@@ -663,7 +663,7 @@ int ExamineCircularBuffer(struct CIRCULAR_BUFFER *cb)
 				if (cb->buffer[cb->tail] == 0xDD) buffer[i] = 0xDB;
 				if (cb->buffer[cb->tail] == 0xDC) buffer[i] = 0xC0;
 			}
-			
+
 			i++;
 			if (++cb->tail >= cb->max) cb->tail = 0;
 		} while (i < len);
@@ -732,6 +732,9 @@ int main(int argc, char **argv)
 
 	printf("Port Opened\r\n");
 
+	// Initially set Slave_TWCID to zero. When we receive LinkReady packet, Slave_TWCID will be populated.
+	Slave_TWCID = 0x0000;
+
 	struct CIRCULAR_BUFFER cir_buf;
 	cir_buf.max = 256;
 	InitCircularBuffer(&cir_buf);
@@ -756,7 +759,7 @@ int main(int argc, char **argv)
 		if (ts.tv_sec != oldtime) {
 
 			// Respond with master heartbeat
-			SendMasterHeartbeat(fd, 700);
+			if (Slave_TWCID) SendMasterHeartbeat(fd, Slave_TWCID, 700);
 
 			oldtime = ts.tv_sec;
 		}
